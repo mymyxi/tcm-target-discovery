@@ -1,7 +1,8 @@
 import sqlite3
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, Response, stream_with_context
 import os
 import requests
+import json
 from collections import defaultdict
 import time
 
@@ -161,6 +162,41 @@ def interpret(np_id):
 
 请用中文简洁解读：1）该化合物的主要药理作用方向；2）最值得关注的靶点及其临床意义；3）在中药研究中的潜在价值。200字以内。"""
     return jsonify({"interpretation": call_ai(prompt)})
+
+@app.route("/api/interpret/stream/<np_id>")
+def interpret_stream(np_id):
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+    if not rate_limit(ip):
+        return jsonify({"error": "请求过于频繁"}), 429
+    compound = query("SELECT * FROM compound WHERE np_id=?", (np_id,))
+    if not compound:
+        return jsonify({"error": "not found"}), 404
+    targets = query("""
+        SELECT t.target_name, t.target_type, ct.activity_type, ct.activity_value, ct.activity_units
+        FROM compound_target ct JOIN target t ON ct.target_id=t.target_id
+        WHERE ct.np_id=? AND ct.activity_value IS NOT NULL
+        ORDER BY ct.activity_value ASC LIMIT 10
+    """, (np_id,))
+    c = compound[0]
+    target_lines = "\n".join([f"- {t['target_name']} ({t['target_type']}): {t['activity_type']} = {t['activity_value']} {t['activity_units']}" for t in targets])
+    prompt = f"""天然产物：{c['name']}（{np_id}）\n存在于 {c['num_of_organism']} 个物种，已知 {c['num_of_target']} 个靶点。\n\n活性最强的前10个靶点：\n{target_lines}\n\n请用中文简洁解读：1）主要药理作用方向；2）最值得关注的靶点及临床意义；3）中药研究潜在价值。200字以内。"""
+
+    def generate():
+        resp = requests.post(AI_URL,
+            headers={"Authorization": f"Bearer {AI_KEY}", "content-type": "application/json"},
+            json={"model": "kimi-k2-5", "stream": True, "messages": [{"role": "user", "content": prompt}]},
+            stream=True, timeout=60)
+        for line in resp.iter_lines():
+            if not line or line == b"data: [DONE]": continue
+            if line.startswith(b"data: "):
+                chunk = json.loads(line[6:])
+                text = chunk["choices"][0]["delta"].get("content", "")
+                if text:
+                    yield f"data: {text}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return Response(stream_with_context(generate()), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 if __name__ == "__main__":
     app.run(debug=True, port=5001)

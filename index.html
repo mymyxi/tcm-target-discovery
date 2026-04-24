@@ -211,10 +211,14 @@ function renderResults(data, type) {
 
 async function getInterpret(npId) {
   const el = document.getElementById('ai-result');
-  el.innerHTML = '<div class="ai-card">AI 解读中...</div>';
-  const res = await fetch(`/api/interpret/${npId}`);
-  const data = await res.json();
-  el.innerHTML = `<div class="ai-card">${data.interpretation}</div>`;
+  el.innerHTML = '<div class="ai-card"></div>';
+  const card = el.querySelector('.ai-card');
+  const es = new EventSource(`/api/interpret/stream/${npId}`);
+  es.onmessage = e => {
+    if (e.data === '[DONE]') { es.close(); return; }
+    card.textContent += e.data;
+  };
+  es.onerror = () => { es.close(); if (!card.textContent) card.textContent = 'AI 解读失败，请重试'; };
 }
 
 async function searchCompound(npId, name) {
