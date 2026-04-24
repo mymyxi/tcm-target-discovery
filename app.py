@@ -10,6 +10,18 @@ app = Flask(__name__)
 DB = "/Users/mx/Desktop/中药靶点发现计划/tcm.db"
 STATIC = "/Users/mx/Desktop/中药靶点发现计划"
 
+def init_log_table():
+    conn = sqlite3.connect(DB)
+    conn.execute("""CREATE TABLE IF NOT EXISTS query_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts TEXT DEFAULT (datetime('now','localtime')),
+        ip TEXT, type TEXT, query TEXT, np_id TEXT
+    )""")
+    conn.commit()
+    conn.close()
+
+init_log_table()
+
 # 速率限制：每IP每分钟最多5次
 _rate = defaultdict(list)
 def rate_limit(ip, limit=5, window=60):
@@ -63,6 +75,14 @@ def query(sql, params=()):
     conn.close()
     return [dict(r) for r in rows]
 
+def log_query(type, query_str, np_id=""):
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+    conn = sqlite3.connect(DB)
+    conn.execute("INSERT INTO query_log (ip, type, query, np_id) VALUES (?,?,?,?)",
+                 (ip, type, query_str, np_id))
+    conn.commit()
+    conn.close()
+
 @app.route("/api/search/herb")
 def search_herb():
     """搜索草药，返回相关天然产物"""
@@ -86,6 +106,7 @@ def search_herb():
         FROM symmap_herb WHERE latin_name LIKE ? LIMIT 1
     """, (f"%{genus}%",))
     extra = herb_info[0] if herb_info else {}
+    log_query("herb", q)
     return jsonify({"query": q, "count": len(rows), "results": rows, "herb_info": extra})
 
 @app.route("/api/search/compound")
@@ -103,6 +124,7 @@ def search_compound():
         ORDER BY ct.activity_value ASC
         LIMIT ?
     """, (f"%{q}%", limit))
+    log_query("compound", q)
     return jsonify({"query": q, "count": len(rows), "results": rows})
 
 @app.route("/api/compound/<np_id>")
@@ -131,6 +153,7 @@ def compound_detail(np_id):
         WHERE ct.np_id=? AND td.disease != ''
         LIMIT 10
     """, (np_id,))
+    log_query("detail", np_id, np_id)
     return jsonify({
         "compound": compound[0],
         "species": species,
@@ -138,11 +161,15 @@ def compound_detail(np_id):
         "diseases": diseases
     })
 
+_interpret_cache = {}
+
 @app.route("/api/interpret/<np_id>")
 def interpret(np_id):
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     if not rate_limit(ip):
         return jsonify({"error": "请求过于频繁，请稍后再试"}), 429
+    if np_id in _interpret_cache:
+        return jsonify({"interpretation": _interpret_cache[np_id], "cached": True})
     compound = query("SELECT * FROM compound WHERE np_id=?", (np_id,))
     if not compound:
         return jsonify({"error": "not found"}), 404
@@ -161,7 +188,10 @@ def interpret(np_id):
 {target_lines}
 
 请用中文简洁解读：1）该化合物的主要药理作用方向；2）最值得关注的靶点及其临床意义；3）在中药研究中的潜在价值。200字以内。"""
-    return jsonify({"interpretation": call_ai(prompt)})
+    result = call_ai(prompt)
+    _interpret_cache[np_id] = result
+    log_query("interpret", np_id, np_id)
+    return jsonify({"interpretation": result})
 
 @app.route("/api/interpret/stream/<np_id>")
 def interpret_stream(np_id):
