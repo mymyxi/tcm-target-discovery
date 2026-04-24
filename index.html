@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>天然产物靶点查询</title>
+<style>
+  :root {
+    --bg: #0a0a0a; --bg2: #111; --border: rgba(255,255,255,0.08);
+    --text: #fff; --muted: rgba(255,255,255,0.5); --accent: #ef4444;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,'PingFang SC',sans-serif; }
+
+  nav {
+    position:fixed; top:0; width:100%; z-index:100;
+    padding:16px 40px; display:flex; justify-content:space-between; align-items:center;
+    border-bottom:1px solid var(--border); background:rgba(10,10,10,0.85); backdrop-filter:blur(12px);
+  }
+  .logo { font-weight:700; font-size:1.1em; }
+  .logo span { color:var(--accent); }
+
+  .hero {
+    min-height:100vh; display:flex; flex-direction:column;
+    justify-content:center; align-items:center; text-align:center; padding:100px 20px 60px;
+  }
+  .hero-badge {
+    border:1px solid var(--border); padding:5px 14px; border-radius:20px;
+    font-size:0.75em; color:var(--muted); margin-bottom:28px; letter-spacing:0.1em;
+  }
+  .hero h1 { font-size:clamp(2em,5vw,4em); font-weight:700; letter-spacing:-0.02em; margin-bottom:16px; }
+  .hero h1 span { color:var(--accent); }
+  .hero p { color:var(--muted); margin-bottom:40px; font-size:1em; }
+
+  .search-box {
+    display:flex; gap:0; width:100%; max-width:600px;
+    border:1px solid var(--border); border-radius:8px; overflow:hidden;
+  }
+  .search-box select {
+    background:var(--bg2); color:var(--muted); border:none; border-right:1px solid var(--border);
+    padding:14px 16px; font-size:0.9em; outline:none; cursor:pointer;
+  }
+  .search-box input {
+    flex:1; background:var(--bg2); color:var(--text); border:none;
+    padding:14px 16px; font-size:0.95em; outline:none;
+  }
+  .search-box input::placeholder { color:var(--muted); }
+  .search-box button {
+    background:var(--accent); color:#fff; border:none;
+    padding:14px 24px; font-size:0.9em; font-weight:600; cursor:pointer; transition:opacity 0.2s;
+  }
+  .search-box button:hover { opacity:0.85; }
+
+  .examples { margin-top:16px; display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  .example-tag {
+    border:1px solid var(--border); padding:4px 12px; border-radius:20px;
+    font-size:0.78em; color:var(--muted); cursor:pointer; transition:border-color 0.2s;
+  }
+  .example-tag:hover { border-color:rgba(255,255,255,0.3); color:var(--text); }
+
+  #results { max-width:900px; margin:0 auto; padding:0 20px 80px; }
+  .result-header { padding:20px 0 16px; border-bottom:1px solid var(--border); margin-bottom:24px; }
+  .result-header h2 { font-size:1.1em; font-weight:600; }
+  .result-header p { color:var(--muted); font-size:0.85em; margin-top:4px; }
+
+  .card {
+    background:var(--bg2); border:1px solid var(--border); border-radius:8px;
+    padding:20px 24px; margin-bottom:12px; cursor:pointer; transition:border-color 0.2s;
+  }
+  .card:hover { border-color:rgba(255,255,255,0.2); }
+  .card-top { display:flex; justify-content:space-between; align-items:flex-start; }
+  .card h3 { font-size:1em; font-weight:600; margin-bottom:6px; }
+  .card .meta { font-size:0.8em; color:var(--muted); }
+  .badge {
+    font-size:0.72em; padding:3px 10px; border-radius:4px;
+    background:rgba(239,68,68,0.1); color:var(--accent); border:1px solid rgba(239,68,68,0.2);
+    white-space:nowrap;
+  }
+  .card .tags { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .tag { font-size:0.72em; padding:3px 8px; border:1px solid var(--border); border-radius:4px; color:var(--muted); }
+
+  .loading { text-align:center; padding:60px; color:var(--muted); }
+  .empty { text-align:center; padding:60px; color:var(--muted); font-size:0.9em; }
+  .ai-btn {
+    margin-top:24px; padding:10px 24px; background:transparent;
+    border:1px solid var(--accent); color:var(--accent); border-radius:6px;
+    cursor:pointer; font-size:0.9em; transition:background 0.2s;
+  }
+  .ai-btn:hover { background:rgba(239,68,68,0.1); }
+  .ai-card {
+    margin-top:16px; padding:20px 24px; border:1px solid rgba(239,68,68,0.2);
+    border-radius:8px; background:rgba(239,68,68,0.05); line-height:1.7;
+    font-size:0.9em; color:var(--text);
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">TCM<span>Target</span></div>
+  <div style="font-size:0.8em;color:var(--muted);">Powered by NPASS 3.0</div>
+</nav>
+
+<div class="hero">
+  <div class="hero-badge">天然产物 · 靶点 · 活性数据</div>
+  <h1>探索<span>天然产物</span>与靶点</h1>
+  <p>基于 NPASS 3.0 数据库，20万天然产物 · 8764个靶点</p>
+  <div class="search-box">
+    <select id="searchType">
+      <option value="herb">草药</option>
+      <option value="compound">化合物</option>
+    </select>
+    <input id="searchInput" type="text" placeholder="输入草药名称，如 Astragalus membranaceus">
+    <button onclick="doSearch()">搜索</button>
+  </div>
+  <div class="examples">
+    <span class="example-tag" onclick="setExample('黄芪','herb')">黄芪</span>
+    <span class="example-tag" onclick="setExample('甘草','herb')">甘草</span>
+    <span class="example-tag" onclick="setExample('人参','herb')">人参</span>
+    <span class="example-tag" onclick="setExample('丹参','herb')">丹参</span>
+    <span class="example-tag" onclick="setExample('Rutin','compound')">芦丁</span>
+    <span class="example-tag" onclick="setExample('Apigenin','compound')">芹菜素</span>
+  </div>
+</div>
+
+<div id="results"></div>
+
+<script>
+function setExample(q, type) {
+  document.getElementById('searchInput').value = q;
+  document.getElementById('searchType').value = type;
+  doSearch();
+}
+
+document.getElementById('searchInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doSearch();
+});
+
+async function doSearch() {
+  const q = document.getElementById('searchInput').value.trim();
+  const type = document.getElementById('searchType').value;
+  if (!q) return;
+
+  const el = document.getElementById('results');
+  el.innerHTML = '<div class="loading">搜索中...</div>';
+  window.scrollTo({top: document.querySelector('.hero').offsetHeight, behavior:'smooth'});
+
+  try {
+    const res = await fetch(`/api/search/${type}?q=${encodeURIComponent(q)}&limit=30`);
+    const data = await res.json();
+    renderResults(data, type);
+  } catch(e) {
+    el.innerHTML = '<div class="empty">请求失败，请确认后端服务已启动</div>';
+  }
+}
+
+function renderResults(data, type) {
+  const el = document.getElementById('results');
+  if (!data.results || data.results.length === 0) {
+    el.innerHTML = '<div class="empty">未找到相关结果</div>';
+    return;
+  }
+
+  let html = `<div class="result-header">
+    <h2>找到 ${data.count} 条结果</h2>
+    <p>查询：${data.query}</p>
+  </div>`;
+
+  if (type === 'herb') {
+    data.results.forEach(r => {
+      html += `<div class="card" onclick="searchCompound('${r.np_id}','${r.name}')">
+        <div class="card-top">
+          <div>
+            <h3>${r.name || r.np_id}</h3>
+            <div class="meta">${r.org_name} · ${r.family_name}</div>
+          </div>
+          <span class="badge">${r.num_of_target} 个靶点</span>
+        </div>
+        <div class="tags"><span class="tag">${r.np_id}</span></div>
+      </div>`;
+    });
+  } else {
+    data.results.forEach(r => {
+      html += `<div class="card">
+        <div class="card-top">
+          <div>
+            <h3>${r.target_name}</h3>
+            <div class="meta">${r.target_type} · ${r.activity_type}</div>
+          </div>
+          <span class="badge">${r.activity_value ? r.activity_value + ' ' + r.activity_units : 'N/A'}</span>
+        </div>
+        ${r.uniprot_id && r.uniprot_id !== 'n.a.' ? `<div class="tags"><span class="tag">UniProt: ${r.uniprot_id}</span></div>` : ''}
+      </div>`;
+    });
+  }
+
+  el.innerHTML = html;
+}
+
+async function getInterpret(npId) {
+  const el = document.getElementById('ai-result');
+  el.innerHTML = '<div class="ai-card">AI 解读中...</div>';
+  const res = await fetch(`/api/interpret/${npId}`);
+  const data = await res.json();
+  el.innerHTML = `<div class="ai-card">${data.interpretation}</div>`;
+}
+
+async function searchCompound(npId, name) {
+  const el = document.getElementById('results');
+  el.innerHTML = '<div class="loading">加载详情...</div>';
+
+  const res = await fetch(`/api/compound/${npId}`);
+  const data = await res.json();
+
+  let html = `<div class="result-header">
+    <h2>${data.compound.name}</h2>
+    <p>${data.compound.np_id} · 存在于 ${data.compound.num_of_organism} 个物种 · ${data.compound.num_of_target} 个靶点</p>
+  </div>`;
+
+  html += `<div style="margin-bottom:24px;color:var(--muted);font-size:0.85em;cursor:pointer;" onclick="history.back()">← 返回</div>`;
+
+  html += `<button class="ai-btn" onclick="getInterpret('${npId}')">AI 解读此化合物</button><div id="ai-result"></div>`;
+  html += `<div style="margin-top:24px;margin-bottom:8px;font-size:0.75em;letter-spacing:0.1em;color:var(--accent);text-transform:uppercase;">靶点活性</div>`;
+  data.targets.forEach(t => {
+    html += `<div class="card">
+      <div class="card-top">
+        <div>
+          <h3>${t.target_name}</h3>
+          <div class="meta">${t.target_type}</div>
+        </div>
+        <span class="badge">${t.activity_type}: ${t.activity_value || 'N/A'} ${t.activity_units || ''}</span>
+      </div>
+    </div>`;
+  });
+
+  el.innerHTML = html;
+}
+</script>
+</body>
+</html>
