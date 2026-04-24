@@ -166,6 +166,18 @@ function renderResults(data, type) {
     <p>查询：${data.query}</p>
   </div>`;
 
+  if (type === 'herb' && data.herb_info && data.herb_info.chinese_name) {
+    const h = data.herb_info;
+    html += `<div class="card" style="margin-bottom:20px;border-color:rgba(239,68,68,0.3)">
+      <div style="font-size:0.75em;color:var(--accent);letter-spacing:0.1em;margin-bottom:8px;">中医属性</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <span><span style="color:var(--muted)">药名</span> ${h.chinese_name}</span>
+        <span><span style="color:var(--muted)">性味</span> ${h.properties_chinese || 'N/A'}</span>
+        <span><span style="color:var(--muted)">归经</span> ${h.meridians_chinese || 'N/A'}</span>
+      </div>
+    </div>`;
+  }
+
   if (type === 'herb') {
     data.results.forEach(r => {
       html += `<div class="card" onclick="searchCompound('${r.np_id}','${r.name}')">
@@ -220,6 +232,19 @@ async function searchCompound(npId, name) {
   html += `<div style="margin-bottom:24px;color:var(--muted);font-size:0.85em;cursor:pointer;" onclick="history.back()">← 返回</div>`;
 
   html += `<button class="ai-btn" onclick="getInterpret('${npId}')">AI 解读此化合物</button><div id="ai-result"></div>`;
+
+  if (data.diseases && data.diseases.length > 0) {
+    html += `<div style="margin-top:24px;margin-bottom:8px;font-size:0.75em;letter-spacing:0.1em;color:var(--accent);text-transform:uppercase;">关联疾病</div>`;
+    data.diseases.forEach(d => {
+      html += `<div class="card">
+        <div class="card-top">
+          <div><h3>${d.disease}</h3><div class="meta">${d.icd11}</div></div>
+          <span class="badge">${d.clinical_status}</span>
+        </div>
+      </div>`;
+    });
+  }
+
   html += `<div style="margin-top:24px;margin-bottom:8px;font-size:0.75em;letter-spacing:0.1em;color:var(--accent);text-transform:uppercase;">靶点活性</div>`;
   data.targets.forEach(t => {
     html += `<div class="card">

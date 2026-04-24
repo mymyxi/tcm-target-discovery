@@ -66,7 +66,6 @@ def query(sql, params=()):
 def search_herb():
     """搜索草药，返回相关天然产物"""
     q = request.args.get("q", "")
-    # 中文转拉丁名
     q = HERB_CN.get(q, q)
     limit = int(request.args.get("limit", 20))
     rows = query("""
@@ -79,7 +78,14 @@ def search_herb():
         ORDER BY c.num_of_target DESC
         LIMIT ?
     """, (f"%{q}%", f"%{q}%", limit))
-    return jsonify({"query": q, "count": len(rows), "results": rows})
+    # 用属名前5字符匹配 SymMap 性味归经
+    genus = q.split()[0][:5] if q else ""
+    herb_info = query("""
+        SELECT chinese_name, properties_chinese, meridians_chinese
+        FROM symmap_herb WHERE latin_name LIKE ? LIMIT 1
+    """, (f"%{genus}%",))
+    extra = herb_info[0] if herb_info else {}
+    return jsonify({"query": q, "count": len(rows), "results": rows, "herb_info": extra})
 
 @app.route("/api/search/compound")
 def search_compound():
@@ -116,10 +122,19 @@ def compound_detail(np_id):
         WHERE ct.np_id=? AND ct.activity_value IS NOT NULL
         ORDER BY ct.activity_value ASC LIMIT 20
     """, (np_id,))
+    diseases = query("""
+        SELECT DISTINCT td.disease, td.clinical_status, td.icd11
+        FROM compound_target ct
+        JOIN target t ON ct.target_id=t.target_id
+        JOIN ttd_target_disease td ON td.target_name LIKE '%' || t.target_name || '%'
+        WHERE ct.np_id=? AND td.disease != ''
+        LIMIT 10
+    """, (np_id,))
     return jsonify({
         "compound": compound[0],
         "species": species,
-        "targets": targets
+        "targets": targets,
+        "diseases": diseases
     })
 
 @app.route("/api/interpret/<np_id>")
