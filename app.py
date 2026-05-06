@@ -7,8 +7,9 @@ from collections import defaultdict
 import time
 
 app = Flask(__name__)
-DB = "/Users/mx/Desktop/中药靶点发现计划/tcm.db"
-STATIC = "/Users/mx/Desktop/中药靶点发现计划"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB = os.path.join(BASE_DIR, "tcm.db")
+STATIC = BASE_DIR
 
 def init_log_table():
     conn = sqlite3.connect(DB)
@@ -32,7 +33,7 @@ def rate_limit(ip, limit=5, window=60):
     _rate[ip].append(now)
     return True
 
-AI_KEY = "18fe96b2-ca14-4e3a-bf4a-5a6fc0c5aaee"
+AI_KEY = os.environ.get("AI_KEY", "")
 AI_URL = "https://ark.cn-beijing.volces.com/api/coding/v3/chat/completions"
 
 def call_ai(prompt):
