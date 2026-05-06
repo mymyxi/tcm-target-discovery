@@ -32,7 +32,7 @@ def rate_limit(ip, limit=5, window=60):
     _rate[ip].append(now)
     return True
 
-AI_KEY = "18fe96b2-ca14-4e3a-bf4a-5a6fc0c5aaee"
+AI_KEY = "这里输入你的key"
 AI_URL = "https://ark.cn-beijing.volces.com/api/coding/v3/chat/completions"
 
 def call_ai(prompt):
